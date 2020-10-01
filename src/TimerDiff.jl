@@ -178,44 +178,44 @@ function prettycount(b)
     return string(@sprintf("%.2f", value), " ", units)
 end
 
-function print_indented(indent::Vector{Bool}, key)
+function print_indented(indent::Vector{Bool}, key; io = stdout)
     if length(indent) > 1
         for is_done in @view(indent[2:end-1])
-            print(is_done ? "  " : "│ ")
+            print(io, is_done ? "  " : "│ ")
         end
 
-        print(indent[end] ? "└ " : "├ ")
+        print(io, indent[end] ? "└ " : "├ ")
     end
 
-    print(rpad(key, 70 - 2 * length(indent)))
+    print(io, rpad(key, 70 - 2 * length(indent)))
 end
 
 is_significant(ratio) = abs(ratio - 1) > 0.10
 
-function default_on_keep(key, lhs, rhs, indent)
+function default_on_keep(key, lhs, rhs, indent; io = stdout)
     stat_lhs, stat_rhs = Stat(lhs), Stat(rhs)
     ratio = compare(stat_lhs, stat_rhs)
 
     # add warnings if there's some significant change
     significant = is_significant(ratio.mean) || is_significant(ratio.count)
-    print(significant ? "! " : "  ")
-    print_indented(indent, key)
-    print("    ")
-    print(lpad(lpad(prettytime(stat_lhs.mean), 9) * " → " * lpad(prettytime(stat_rhs.mean), 9), 21), " ", lpad(prettydiff(ratio.mean), 12))
-    print("    ")
-    print(lpad(lpad(prettycount(stat_lhs.count), 8) * " → " * lpad(prettycount(stat_rhs.count), 8), 21), " ", lpad(prettydiff(ratio.count), 12))
-    println()
+    print(io, significant ? "! " : "  ")
+    print_indented(indent, key, io = io)
+    print(io, "    ")
+    print(io, lpad(lpad(prettytime(stat_lhs.mean), 9) * " → " * lpad(prettytime(stat_rhs.mean), 9), 21), " ", lpad(prettydiff(ratio.mean), 12))
+    print(io, "    ")
+    print(io, lpad(lpad(prettycount(stat_lhs.count), 8) * " → " * lpad(prettycount(stat_rhs.count), 8), 21), " ", lpad(prettydiff(ratio.count), 12))
+    println(io)
 end
 
-function default_on_add_or_delete(key, item, mode, indent)
+function default_on_add_or_delete(key, item, mode, indent; io = stdout)
     stat = Stat(item)
-    print(mode == ADD ? "+ " : "- ")
-    print_indented(indent, key)
-    print("    ")
-    print(rpad(lpad(prettytime(stat.mean), mode == DELETE ? 9 : 21), 34))
-    print("    ")
-    print(rpad(lpad(prettycount(stat.count), mode == DELETE ? 10 : 21), 34))
-    println()
+    print(io, mode == ADD ? "+ " : "- ")
+    print_indented(indent, key, io = io)
+    print(io, "    ")
+    print(io, rpad(lpad(prettytime(stat.mean), mode == DELETE ? 9 : 21), 34))
+    print(io, "    ")
+    print(io, rpad(lpad(prettycount(stat.count), mode == DELETE ? 10 : 21), 34))
+    println(io)
 end
 
 function just_walk(a::OrderedDict{String}, mode::UInt8, indent::Vector{Bool}, on_add_or_delete)
@@ -231,8 +231,8 @@ function just_walk(a::OrderedDict{String}, mode::UInt8, indent::Vector{Bool}, on
     pop!(indent)
 end
 
-function print_header()
-    print(
+function print_header(; io = stdout)
+    print(io,
 """
   ================================================================================================================================================
                                                                                       Mean                                    #
@@ -283,11 +283,13 @@ end
 
 to_json(a::String) = JSON.parsefile(a, dicttype=OrderedDict)
 
-to_table(a::String, b::String) = to_table(to_json(a), to_json(b))
+to_table(a::String, b::String; io = stdout) = to_table(to_json(a), to_json(b), io = io)
 
-function to_table(a, b)
-    print_header()
-    walk(a, b)
+function to_table(a, b; io = stdout)
+    print_header(io = io)
+    on_keep = (key, lhs, rhs, indent) -> default_on_keep(key, lhs, rhs, indent, io = io)
+    on_add_or_delete = (key, item, mode, indent) -> default_on_add_or_delete(key, item, mode, indent, io = io)
+    walk(a, b, Bool[], on_keep, on_add_or_delete)
 end
 
 
