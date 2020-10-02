@@ -190,15 +190,35 @@ function print_indented(indent::Vector{Bool}, key; io = stdout)
     print(io, rpad(key, 70 - 2 * length(indent)))
 end
 
-is_significant(ratio) = abs(ratio - 1) > 0.10
+function describe_change(ratio; factor = 0.1)
+    diff = ratio - 1
+
+    if diff > factor
+        :increased
+    elseif diff < -factor
+        :decreased
+    else
+        :no
+    end
+end
 
 function default_on_keep(key, lhs, rhs, indent; io = stdout)
     stat_lhs, stat_rhs = Stat(lhs), Stat(rhs)
     ratio = compare(stat_lhs, stat_rhs)
 
-    # add warnings if there's some significant change
-    significant = is_significant(ratio.mean) || is_significant(ratio.count)
-    print(io, significant ? "! " : "  ")
+    # If mean runtime has increased / decreased significantly, add a - or + respectively
+    # If number of calls changed significantly, add a !
+    runtime_change = describe_change(ratio.mean)
+    count_change = describe_change(ratio.count)
+    print(io, if runtime_change === :increased
+        "- "
+    elseif runtime_change === :decreased
+        "+ "
+    elseif count_change !== :no
+        "! "
+    else
+        "  "
+    end)
     print_indented(indent, key, io = io)
     print(io, "    ")
     print(io, lpad(lpad(prettytime(stat_lhs.mean), 9) * " → " * lpad(prettytime(stat_rhs.mean), 9), 21), " ", lpad(prettydiff(ratio.mean), 12))
@@ -209,7 +229,7 @@ end
 
 function default_on_add_or_delete(key, item, mode, indent; io = stdout)
     stat = Stat(item)
-    print(io, mode == ADD ? "+ " : "- ")
+    print(io, "  ")
     print_indented(indent, key, io = io)
     print(io, "    ")
     print(io, rpad(lpad(prettytime(stat.mean), mode == DELETE ? 9 : 21), 34))
